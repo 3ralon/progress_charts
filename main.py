@@ -1,12 +1,80 @@
 from pathlib import Path
 from github import Github
-from bs4 import BeautifulSoup
-import requests
+from github.Issue import Issue
+from github.PaginatedList import PaginatedList
+import numpy as np
+
 
 WORKSPACE_ROOT = Path.cwd()
 TOKEN_FILE = "git.token"
 ORGANISATION_NAME = "Aparking"
 REPOSITORY_NAME = "AparKing_Backend"
+MILESTONE = 1
+
+
+def calculate_statistics(issues: PaginatedList[Issue]) -> dict:
+    opened_issues = []
+    closed_issues = []
+    for issue in issues:
+        if issue.closed_at is not None:
+            closed_issues.append(issue)
+        else:
+            opened_issues.append(issue)
+
+    opened_issues.sort(key=lambda x: x.number, reverse=False)
+    closed_issues.sort(key=lambda x: x.closed_at, reverse=False)
+
+    statistics = {
+        "opened_issues": opened_issues,
+        "closed_issues": closed_issues,
+        "total_issues": issues.totalCount,
+    }
+
+    return statistics
+
+
+def create_chart(
+    issues: PaginatedList[Issue], chart_name="chart.png", chart_type="burndown"
+) -> str:
+
+    if chart_type == "burndown":
+        pass
+    elif chart_type == "burnup":
+        pass
+    else:
+        raise ValueError(
+            f"Unknown chart type: {chart_type}. Supported types are 'burndown' and 'burnup'"
+        )
+
+    return WORKSPACE_ROOT / chart_name
+
+
+def write_report(report: dict):
+    with open("report.md", "w") as f:
+        f.write(f"# Progress Report For {report['repository']}\n\n")
+        f.write(f"## Team Information\n\n")
+        f.write(f"- Organisation: {report['organisation']}\n\n")
+        f.write(f"## Report Information\n\n")
+        f.write(f"- Sprint: {report['milestone']}\n")
+        f.write(f"- Total issues: {report['total_issues_n']}\n")
+        f.write(
+            f"- Opened issues: {report['opened_issues_n']} ({round((report['opened_issues_n']/report['total_issues_n'])*100, 1)}%)\n"
+        )
+        f.write(
+            f"- Closed issues: {report['closed_issues_n']} ({round((report['closed_issues_n']/report['total_issues_n'])*100, 1)}%)\n\n"
+        )
+        f.write("## Progress Chart\n\n")
+        f.write("### General\n\n")
+        f.write(f"![General Progress Chart]({report['general_chart']})\n\n")
+        f.write("### Last week\n\n")
+        f.write(f"![Week Progress Chart]({report['week_chart']})\n\n")
+        f.write(f"## Issues\n\n")
+        f.write("### Opened issues:\n\n")
+        for issue in report["opened_issues"]:
+            f.write(f"- [{issue.number} - {issue.title}]({issue.html_url})\n")
+        f.write("\n### Closed issues:\n\n")
+        for issue in report["closed_issues"]:
+            f.write(f"- [{issue.number} - {issue.title}]({issue.html_url})\n")
 
 
 def main():
@@ -20,23 +88,36 @@ def main():
     github = Github(token)
 
     # Retrieve repository
-
     organisation = github.get_organization(ORGANISATION_NAME)
+    colaborators = organisation.get_members()
     repository = organisation.get_repo(REPOSITORY_NAME)
     milestones = repository.get_milestones(state="all")
-    issues = repository.get_issues(state="all", milestone=milestones[0])
+    if MILESTONE > milestones.totalCount:
+        raise ValueError(f"Sprint {MILESTONE} does not exist")
 
-    for issue in issues:
-        url = issue.html_url
-        if "pull" in url:
-            continue
-        html = requests.get(url)
-        soup = BeautifulSoup(issue.body, "html.parser")
+    milestone = milestones[MILESTONE - 1]
+    issues = repository.get_issues(state="all", milestone=milestone)
+    issues = list(filter(lambda i: i.pull_request is None, issues))
 
-        # TODO - Extract estimation from issue body
-        estimation = 0
+    # Calculating statistics
+    report = {}
+    report["total_issues_n"] = len(issues)
+    report["opened_issues"] = sorted(
+        filter(lambda i: not i.closed_at, issues), key=lambda x: x.number
+    )
+    report["closed_issues"] = sorted(
+        filter(lambda i: i.closed_at, issues), key=lambda x: x.number
+    )
+    report["opened_issues_n"] = len(report["opened_issues"])
+    report["closed_issues_n"] = len(report["closed_issues"])
+    report["general_chart"] = ""
+    report["week_chart"] = ""
+    report["organisation"] = ORGANISATION_NAME
+    report["colaborators"] = colaborators
+    report["repository"] = REPOSITORY_NAME
+    report["milestone"] = MILESTONE
 
-        print(f"{issue.title}: {estimation}")
+    write_report(report)
 
 
 if __name__ == "__main__":
@@ -47,3 +128,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Exiting...")
         sys.exit(0)
+    except Exception as e:
+        print(f"{e.with_traceback()}")
+        sys.exit(1)
