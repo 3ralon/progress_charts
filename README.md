@@ -12,8 +12,6 @@ To install the script, you need to have Python 3.8 or higher. You can install th
 
 ```bash
 pip install -r requirements.txt
-plawright install
-playwright install-deps
 ```
 
 ## Dependencies
