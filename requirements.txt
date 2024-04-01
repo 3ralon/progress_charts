@@ -1,3 +1,6 @@
 matplotlib
 numpy
 PyGithub
+dotenv
+jupyterlab
+tqdm
