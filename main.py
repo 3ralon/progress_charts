@@ -202,7 +202,7 @@ def main():
         issues,
         chart_name="general_chart",
         start_date=milestone.created_at,
-        end_date="2024-03-21",
+        end_date="2024-04-01",
     )
     report["week_chart"] = create_chart(
         issues,
